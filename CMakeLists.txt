@@ -71,6 +71,14 @@ if (WIN32)
         option(COOKIELINK_ENABLE_ASIO "Enable ASIO audio backend (requires ASIO SDK)" OFF)
     endif()
 
+    set(COOKIELINK_WEBVIEW2_ROOT "" CACHE PATH "Path to Microsoft.Web.WebView2/build/native from the WebView2 NuGet package")
+    set(COOKIELINK_WIN_WEBVIEW2_ENABLED 0)
+    if (EXISTS "${COOKIELINK_WEBVIEW2_ROOT}/include/WebView2.h")
+        set(COOKIELINK_WIN_WEBVIEW2_ENABLED 1)
+    elseif (COOKIELINK_WEBVIEW2_ROOT)
+        message(WARNING "COOKIELINK_WEBVIEW2_ROOT was set but WebView2.h was not found under ${COOKIELINK_WEBVIEW2_ROOT}/include. WebView2 will be disabled.")
+    endif()
+
     if (COOKIELINK_ENABLE_ASIO AND EXISTS "${COOKIELINK_ASIO_SDK_PATH}/iasiodrv.h")
         set(COOKIELINK_ASIO_ENABLED 1)
     elseif (COOKIELINK_ENABLE_ASIO)
@@ -78,6 +86,7 @@ if (WIN32)
     endif()
 
     message(STATUS "COOKIELINK_ASIO_ENABLED=${COOKIELINK_ASIO_ENABLED}")
+    message(STATUS "COOKIELINK_WIN_WEBVIEW2_ENABLED=${COOKIELINK_WIN_WEBVIEW2_ENABLED}")
 endif()
 
 
@@ -260,6 +269,9 @@ function(cookielink_add_custom_plugin_target target_name product_name formats is
         list (APPEND PlatSourceFiles  Source/CrossPlatformUtilsMac.mm)
     elseif (WIN32)
         list (APPEND HEADER_INCLUDES deps/windows)
+        if (COOKIELINK_WIN_WEBVIEW2_ENABLED)
+            list (APPEND HEADER_INCLUDES "${COOKIELINK_WEBVIEW2_ROOT}/include")
+        endif()
         if (COOKIELINK_ASIO_ENABLED)
             list (APPEND HEADER_INCLUDES ${COOKIELINK_ASIO_SDK_PATH})
         endif()
@@ -283,7 +295,7 @@ function(cookielink_add_custom_plugin_target target_name product_name formats is
             WINVER=0x0601
             _WIN32_WINNT=0x0601
             OSC_HOST_LITTLE_ENDIAN=1
-            JUCE_USE_WIN_WEBVIEW2=1)
+            JUCE_USE_WIN_WEBVIEW2=${COOKIELINK_WIN_WEBVIEW2_ENABLED})
     else()
         # Linux
         list (APPEND PlatSourceFiles  Source/CrossPlatformUtilsLinux.cpp)
@@ -528,4 +540,3 @@ cookielink_add_custom_plugin_target(CookieLink CookieLink "${FormatsToBuild}" FA
 
 # Mobile targets
 # Mobile targets are not part of the desktop HTML-shell build.
-

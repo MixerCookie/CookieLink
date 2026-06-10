@@ -1,0 +1,294 @@
+name: Build and Release CookieLink
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag, for example v1.7.2
+        required: true
+        default: v1.7.2
+      prerelease:
+        description: Mark the GitHub Release as prerelease
+        required: true
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+      include_aax:
+        description: Build and package signed macOS AAX when SDK, PACE and codesign secrets are available
+        required: true
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+      macos_runner:
+        description: macOS runner label. Use a self-hosted signing runner for AAX.
+        required: true
+        default: macos-13
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    name: macOS universal installer
+    runs-on: ${{ inputs.macos_runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare optional AAX SDK
+        if: ${{ inputs.include_aax == 'true' }}
+        env:
+          AAX_SDK_PATH_FROM_VARS: ${{ vars.AAX_SDK_PATH }}
+          AAX_SDK_ZIP_BASE64: ${{ secrets.AAX_SDK_ZIP_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [ -n "${AAX_SDK_PATH_FROM_VARS:-}" ] && [ -d "${AAX_SDK_PATH_FROM_VARS}" ]; then
+            echo "AAX_SDK_PATH=${AAX_SDK_PATH_FROM_VARS}" >> "${GITHUB_ENV}"
+            exit 0
+          fi
+
+          if [ -z "${AAX_SDK_ZIP_BASE64:-}" ]; then
+            echo "::error::include_aax=true requires vars.AAX_SDK_PATH on the runner or secrets.AAX_SDK_ZIP_BASE64."
+            exit 1
+          fi
+
+          export AAX_ZIP="${RUNNER_TEMP}/aax-sdk.zip"
+          python3 - <<'PY'
+          import base64
+          import os
+          from pathlib import Path
+
+          Path(os.environ["AAX_ZIP"]).write_bytes(base64.b64decode(os.environ["AAX_SDK_ZIP_BASE64"]))
+          PY
+
+          mkdir -p "${RUNNER_TEMP}/aax-sdk"
+          /usr/bin/ditto -x -k "${AAX_ZIP}" "${RUNNER_TEMP}/aax-sdk"
+          aax_header="$(find "${RUNNER_TEMP}/aax-sdk" -path '*/Interfaces/AAX.h' -print -quit)"
+          if [ -z "${aax_header}" ]; then
+            echo "::error::AAX SDK zip did not contain Interfaces/AAX.h."
+            exit 1
+          fi
+          echo "AAX_SDK_PATH=${aax_header%/Interfaces/AAX.h}" >> "${GITHUB_ENV}"
+
+      - name: Prepare optional PACE wraptool
+        if: ${{ inputs.include_aax == 'true' }}
+        env:
+          PACE_WRAPTOOL_PATH_FROM_VARS: ${{ vars.PACE_WRAPTOOL_PATH }}
+          PACE_WRAPTOOL_ZIP_BASE64: ${{ secrets.PACE_WRAPTOOL_ZIP_BASE64 }}
+        run: |
+          set -euo pipefail
+          default_wraptool="/Applications/PACEAntiPiracy/Eden/Fusion/Versions/5/bin/wraptool"
+
+          if [ -n "${PACE_WRAPTOOL_PATH_FROM_VARS:-}" ] && [ -x "${PACE_WRAPTOOL_PATH_FROM_VARS}" ]; then
+            echo "PACE_WRAPTOOL_PATH=${PACE_WRAPTOOL_PATH_FROM_VARS}" >> "${GITHUB_ENV}"
+            exit 0
+          fi
+
+          if [ -x "${default_wraptool}" ]; then
+            echo "PACE_WRAPTOOL_PATH=${default_wraptool}" >> "${GITHUB_ENV}"
+            exit 0
+          fi
+
+          if [ -z "${PACE_WRAPTOOL_ZIP_BASE64:-}" ]; then
+            echo "::error::include_aax=true requires PACE wraptool on the runner, vars.PACE_WRAPTOOL_PATH, or secrets.PACE_WRAPTOOL_ZIP_BASE64."
+            exit 1
+          fi
+
+          export PACE_ZIP="${RUNNER_TEMP}/pace-wraptool.zip"
+          python3 - <<'PY'
+          import base64
+          import os
+          from pathlib import Path
+
+          Path(os.environ["PACE_ZIP"]).write_bytes(base64.b64decode(os.environ["PACE_WRAPTOOL_ZIP_BASE64"]))
+          PY
+
+          mkdir -p "${RUNNER_TEMP}/pace-wraptool"
+          /usr/bin/ditto -x -k "${PACE_ZIP}" "${RUNNER_TEMP}/pace-wraptool"
+          wraptool="$(find "${RUNNER_TEMP}/pace-wraptool" -type f -name wraptool -print -quit)"
+          if [ -z "${wraptool}" ]; then
+            echo "::error::PACE wraptool zip did not contain wraptool."
+            exit 1
+          fi
+          chmod +x "${wraptool}"
+          echo "PACE_WRAPTOOL_PATH=${wraptool}" >> "${GITHUB_ENV}"
+
+      - name: Import optional CookieSign certificate
+        if: ${{ inputs.include_aax == 'true' }}
+        env:
+          MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_KEYCHAIN_PASSWORD: ${{ secrets.MACOS_KEYCHAIN_PASSWORD }}
+          MACOS_CODESIGN_IDENTITY_FROM_VARS: ${{ vars.MACOS_CODESIGN_IDENTITY }}
+        run: |
+          set -euo pipefail
+          identity="${MACOS_CODESIGN_IDENTITY_FROM_VARS:-CookieSign}"
+
+          if [ -n "${MACOS_CERTIFICATE_P12_BASE64:-}" ]; then
+            : "${MACOS_CERTIFICATE_PASSWORD:?MACOS_CERTIFICATE_PASSWORD is required when MACOS_CERTIFICATE_P12_BASE64 is set.}"
+            keychain_password="${MACOS_KEYCHAIN_PASSWORD:-temporary-keychain-password}"
+            keychain="${RUNNER_TEMP}/cookielink-signing.keychain-db"
+            export CERT_P12="${RUNNER_TEMP}/CookieSign.p12"
+
+            python3 -c 'import base64, os; from pathlib import Path; Path(os.environ["CERT_P12"]).write_bytes(base64.b64decode(os.environ["MACOS_CERTIFICATE_P12_BASE64"]))'
+
+            security create-keychain -p "${keychain_password}" "${keychain}"
+            security set-keychain-settings -lut 21600 "${keychain}"
+            security unlock-keychain -p "${keychain_password}" "${keychain}"
+            security import "${CERT_P12}" -k "${keychain}" -P "${MACOS_CERTIFICATE_PASSWORD}" -T /usr/bin/codesign
+            security list-keychains -d user -s "${keychain}" login.keychain
+            security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "${keychain_password}" "${keychain}"
+          fi
+
+          if ! security find-identity -v -p codesigning | grep -Fq "${identity}"; then
+            echo "::error::Code signing identity '${identity}' was not found. Import CookieSign or set vars.MACOS_CODESIGN_IDENTITY."
+            exit 1
+          fi
+
+          echo "MACOS_CODESIGN_IDENTITY=${identity}" >> "${GITHUB_ENV}"
+
+      - name: Configure
+        run: |
+          set -euo pipefail
+          codesign_identity="-"
+          if [ "${{ inputs.include_aax }}" = "true" ]; then
+            codesign_identity="${MACOS_CODESIGN_IDENTITY:-CookieSign}"
+          fi
+
+          cmake_args=(
+            -S .
+            -B build
+            -DCMAKE_BUILD_TYPE=Release
+            -DCOOKIELINK_MACOS_CODESIGN_IDENTITY="${codesign_identity}"
+          )
+
+          if [ -n "${AAX_SDK_PATH:-}" ]; then
+            cmake_args+=("-DAAX_SDK_PATH=${AAX_SDK_PATH}")
+          fi
+
+          cmake "${cmake_args[@]}"
+
+      - name: Build app and plugins
+        run: cmake --build build --target CookieLink_All --config Release --parallel 2
+
+      - name: Package installer
+        env:
+          PACE_ACCOUNT: ${{ secrets.PACE_ACCOUNT }}
+          PACE_PASSWORD: ${{ secrets.PACE_PASSWORD }}
+          PACE_WCGUID: ${{ secrets.PACE_WCGUID }}
+          PACE_SIGNID: ${{ secrets.PACE_SIGNID }}
+        run: ./packaging/macos_package.sh "${{ inputs.tag }}" build dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CookieLink-macos-universal-installer
+          path: dist/CookieLink-${{ inputs.tag }}-macos-universal.pkg
+
+  linux:
+    name: Linux x64 installer
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake ninja-build pkg-config \
+            dpkg-dev \
+            libasound2-dev libjack-jackd2-dev libfreetype6-dev libfontconfig1-dev \
+            libx11-dev libxext-dev libxinerama-dev libxrandr-dev libxcursor-dev \
+            libxcomposite-dev libxrender-dev libxdamage-dev libxfixes-dev \
+            libgl1-mesa-dev libglu1-mesa-dev libgtk-3-dev libwebkit2gtk-4.0-dev \
+            libopus-dev
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build app and plugins
+        run: cmake --build build --target CookieLink_All --config Release --parallel 2
+
+      - name: Package installer
+        run: ./packaging/linux_deb.sh "${{ inputs.tag }}" build dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CookieLink-linux-x64-installer
+          path: dist/CookieLink-${{ inputs.tag }}-linux-x64.deb
+
+  windows:
+    name: Windows x64 installer
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install packaging tools
+        shell: pwsh
+        run: choco install nsis -y --no-progress
+
+      - name: Install WebView2 SDK
+        shell: pwsh
+        run: nuget install Microsoft.Web.WebView2 -Version 1.0.2849.39 -OutputDirectory webview2
+
+      - name: Configure
+        shell: pwsh
+        run: |
+          $webView2Root = Join-Path $env:GITHUB_WORKSPACE "webview2/Microsoft.Web.WebView2.1.0.2849.39/build/native"
+          cmake -S . -B build -DCOOKIELINK_WEBVIEW2_ROOT="$webView2Root"
+
+      - name: Build app and plugins
+        shell: pwsh
+        run: cmake --build build --target CookieLink_All --config Release --parallel 2
+
+      - name: Package installer
+        shell: pwsh
+        run: |
+          $version = "${{ inputs.tag }}"
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          $buildDir = (Resolve-Path "build").Path
+          $webView2Dir = (Resolve-Path "webview2/Microsoft.Web.WebView2.1.0.2849.39/build/native").Path
+          $outFile = Join-Path (Resolve-Path "dist").Path "CookieLink-$version-windows-x64-installer.exe"
+          makensis /DVERSION="$version" /DBUILD_DIR="$buildDir" /DWEBVIEW2_DIR="$webView2Dir" /DOUTFILE="$outFile" packaging/windows_cookie_link.nsi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CookieLink-windows-x64-installer
+          path: dist/CookieLink-${{ inputs.tag }}-windows-x64-installer.exe
+
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs:
+      - macos
+      - linux
+      - windows
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag }}
+          name: CookieLink ${{ inputs.tag }}
+          target_commitish: ${{ github.sha }}
+          prerelease: ${{ inputs.prerelease == 'true' }}
+          files: release-artifacts/*
+          body: |
+            CookieLink binary release.
+
+            Installer assets:
+            - macOS universal .pkg: Standalone app, VST3, AU and LV2. Signed AAX is included when include_aax=true and the AAX SDK, CookieSign identity and PACE wraptool credentials are configured.
+            - Linux x64 .deb: Standalone app, VST3 and LV2.
+            - Windows x64 installer .exe: Standalone app and VST3.
+
+            AAX signing note:
+            - include_aax=true must run on a macOS signing runner with the AAX SDK, CookieSign identity, PACE wraptool and an active Eden Tools license through iLok or iLok Cloud.

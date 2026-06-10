@@ -122,6 +122,71 @@ CookieLink_AU
 CookieLink_LV2
 ```
 
+AAX 需要本机或 CI 提供 AAX SDK：
+
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DAAX_SDK_PATH=/path/to/AAX_SDK
+cmake --build build --target CookieLink_All --config Release -j2
+```
+
+生成 AAX 后必须签名，否则 Pro Tools 无法正常加载。打包脚本会在发现 AAX 产物时执行：
+
+```sh
+codesign --force --verify --verbose --sign "CookieSign" --options runtime --timestamp "CookieLink.aaxplugin"
+wraptool sign --verbose --account "$PACE_ACCOUNT" --password "$PACE_PASSWORD" --wcguid "$PACE_WCGUID" --signid "$PACE_SIGNID" --in "CookieLink.aaxplugin" --out "signed-aax/CookieLink.aaxplugin"
+```
+
+## 发布二进制
+
+GitHub Actions 已提供手动发布流程：
+
+1. 打开仓库的 **Actions** 页面。
+2. 选择 **Build and Release CookieLink**。
+3. 点击 **Run workflow**，输入 tag，例如 `v1.7.2`。
+
+流程会构建并发布：
+
+- `CookieLink-<tag>-macos-universal.pkg`
+  - 安装 `CookieLink.app`
+  - 安装 `CookieLink.vst3`
+  - 安装 `CookieLink.component`
+  - 安装 `CookieLink.lv2`
+  - 如果打开 `include_aax` 且签名环境完整，会安装已签名的 `CookieLink.aaxplugin` 或 `Cookie Link.aaxplugin`
+- `CookieLink-<tag>-linux-x64.deb`
+  - 安装 `cookielink`
+  - 安装 `CookieLink.vst3`
+  - 安装 `CookieLink.lv2`
+- `CookieLink-<tag>-windows-x64-installer.exe`
+  - 安装 `CookieLink.exe`
+  - 安装 `CookieLink.vst3`
+
+### AAX 发布配置
+
+AAX SDK、PACE 工具和签名证书不能放进公开仓库。需要 AAX 时，建议使用配置好的 self-hosted macOS runner，或在 GitHub 仓库配置以下私有变量/Secrets：
+
+| 名称 | 类型 | 用途 |
+| --- | --- | --- |
+| `AAX_SDK_PATH` | Repository variable | self-hosted runner 上的 AAX SDK 路径 |
+| `PACE_WRAPTOOL_PATH` | Repository variable | self-hosted runner 上的 `wraptool` 路径 |
+| `MACOS_CODESIGN_IDENTITY` | Repository variable | 默认可用 `CookieSign` |
+| `PACE_ACCOUNT` | Secret | PACE 账号 |
+| `PACE_PASSWORD` | Secret | PACE 密码 |
+| `PACE_WCGUID` | Secret | PACE wraptool `--wcguid` |
+| `PACE_SIGNID` | Secret | PACE wraptool `--signid` |
+| `MACOS_CERTIFICATE_P12_BASE64` | Secret | 如果 runner 没有安装证书，可放 `CookieSign.p12` 的 base64 |
+| `MACOS_CERTIFICATE_PASSWORD` | Secret | `.p12` 密码 |
+| `MACOS_KEYCHAIN_PASSWORD` | Secret | CI 临时 keychain 密码 |
+
+签名机还必须有可用的 PACE Eden Tools 许可证（iLok2、iLok3 或 iLok Cloud）。没有这个许可证时，`wraptool sign` 会失败，脚本会停止发布，避免生成 Pro Tools 不能加载的 AAX。
+
+本地打包可以直接使用同一套脚本：
+
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCOOKIELINK_MACOS_CODESIGN_IDENTITY=CookieSign
+cmake --build build --target CookieLink_All --config Release -j2
+./packaging/macos_package.sh v1.7.2 build dist
+```
+
 ## 仓库拆分
 
 这个仓库只放主 App/插件：
