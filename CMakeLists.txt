@@ -36,7 +36,7 @@ endif()
 # `project()` command. `project()` sets up some helpful variables that describe source/binary
 # directories, and the current project version. This is a standard CMake command.
 
-project(CookieLink VERSION 1.7.2)
+project(CookieLink VERSION 1.0.0)
 
 set(BUILDVERSION 80)
 

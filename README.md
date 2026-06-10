@@ -142,7 +142,7 @@ GitHub Actions 已提供手动发布流程：
 
 1. 打开仓库的 **Actions** 页面。
 2. 选择 **Build and Release CookieLink**。
-3. 点击 **Run workflow**，输入 tag，例如 `v1.7.2`。
+3. 点击 **Run workflow**，输入 tag，例如 `v1.0.0`。
 
 流程会构建并发布：
 
@@ -184,7 +184,7 @@ AAX SDK、PACE 工具和签名证书不能放进公开仓库。需要 AAX 时，
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCOOKIELINK_MACOS_CODESIGN_IDENTITY=CookieSign
 cmake --build build --target CookieLink_All --config Release -j2
-./packaging/macos_package.sh v1.7.2 build dist
+./packaging/macos_package.sh v1.0.0 build dist
 ```
 
 ## 仓库拆分
