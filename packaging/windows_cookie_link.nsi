@@ -21,14 +21,15 @@ InstallDir "$PROGRAMFILES64\CookieLink"
 !include "MUI2.nsh"
 
 !insertmacro MUI_PAGE_WELCOME
+!insertmacro MUI_PAGE_COMPONENTS
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
 !insertmacro MUI_UNPAGE_CONFIRM
 !insertmacro MUI_UNPAGE_INSTFILES
-!insertmacro MUI_LANGUAGE "English"
+!insertmacro MUI_LANGUAGE "SimpChinese"
 
-Section "CookieLink" SecCookieLink
+Section "CookieLink 应用程序" SecApp
   SetShellVarContext all
 
   SetOutPath "$INSTDIR"
@@ -40,21 +41,38 @@ Section "CookieLink" SecCookieLink
     !endif
   !endif
 
-  SetOutPath "$COMMONFILES64\VST3"
-  File /r "${BUILD_DIR}\CookieLink_artefacts\Release\VST3\CookieLink.vst3"
-
-  !if /FileExists "${BUILD_DIR}\CookieLink_artefacts\Release\AAX\CookieLink.aaxplugin"
-    SetOutPath "$COMMONFILES64\Avid\Audio\Plug-Ins"
-    File /r "${BUILD_DIR}\CookieLink_artefacts\Release\AAX\CookieLink.aaxplugin"
-  !endif
-
-  !if /FileExists "${BUILD_DIR}\CookieLink_artefacts\Release\AAX\Cookie Link.aaxplugin"
-    SetOutPath "$COMMONFILES64\Avid\Audio\Plug-Ins"
-    File /r "${BUILD_DIR}\CookieLink_artefacts\Release\AAX\Cookie Link.aaxplugin"
-  !endif
-
   CreateDirectory "$SMPROGRAMS\CookieLink"
   CreateShortcut "$SMPROGRAMS\CookieLink\CookieLink.lnk" "$INSTDIR\CookieLink.exe"
+  CreateShortcut "$DESKTOP\CookieLink.lnk" "$INSTDIR\CookieLink.exe"
+SectionEnd
+
+Section "VST3 插件" SecVST3
+  SetShellVarContext all
+
+  SetOutPath "$COMMONFILES64\VST3"
+  File /r "${BUILD_DIR}\CookieLink_artefacts\Release\VST3\CookieLink.vst3"
+SectionEnd
+
+!if /FileExists "${BUILD_DIR}\CookieLink_artefacts\Release\AAX\CookieLink.aaxplugin"
+Section "AAX 插件 (Pro Tools)" SecAAX
+  SetShellVarContext all
+
+  SetOutPath "$COMMONFILES64\Avid\Audio\Plug-Ins"
+  File /r "${BUILD_DIR}\CookieLink_artefacts\Release\AAX\CookieLink.aaxplugin"
+SectionEnd
+!endif
+
+!if /FileExists "${BUILD_DIR}\CookieLink_artefacts\Release\AAX\Cookie Link.aaxplugin"
+Section "AAX 插件 (Pro Tools)" SecAAX2
+  SetShellVarContext all
+
+  SetOutPath "$COMMONFILES64\Avid\Audio\Plug-Ins"
+  File /r "${BUILD_DIR}\CookieLink_artefacts\Release\AAX\Cookie Link.aaxplugin"
+SectionEnd
+!endif
+
+Section "-Uninstaller"
+  SetShellVarContext all
 
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\CookieLink" "DisplayName" "CookieLink"
@@ -63,18 +81,26 @@ Section "CookieLink" SecCookieLink
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\CookieLink" "UninstallString" "$\"$INSTDIR\Uninstall.exe$\""
 SectionEnd
 
+LangString DESC_SecApp ${LANG_SIMPCHINESE} "独立运行的 CookieLink 应用程序，会创建开始菜单和桌面快捷方式。"
+LangString DESC_SecVST3 ${LANG_SIMPCHINESE} "VST3 插件，用于 Cubase、Studio One、Reaper 等宿主。"
+
+!insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
+  !insertmacro MUI_DESCRIPTION_TEXT ${SecApp} $(DESC_SecApp)
+  !insertmacro MUI_DESCRIPTION_TEXT ${SecVST3} $(DESC_SecVST3)
+!insertmacro MUI_FUNCTION_DESCRIPTION_END
+
 Section "Uninstall"
   SetShellVarContext all
 
   Delete "$SMPROGRAMS\CookieLink\CookieLink.lnk"
   RMDir "$SMPROGRAMS\CookieLink"
+  Delete "$DESKTOP\CookieLink.lnk"
 
   Delete "$INSTDIR\CookieLink.exe"
   Delete "$INSTDIR\WebView2Loader.dll"
   Delete "$INSTDIR\Uninstall.exe"
   RMDir "$INSTDIR"
 
-  Delete "$COMMONFILES64\VST3\CookieLink.vst3"
   RMDir /r "$COMMONFILES64\VST3\CookieLink.vst3"
   RMDir /r "$COMMONFILES64\Avid\Audio\Plug-Ins\CookieLink.aaxplugin"
   RMDir /r "$COMMONFILES64\Avid\Audio\Plug-Ins\Cookie Link.aaxplugin"
