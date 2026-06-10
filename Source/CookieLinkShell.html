@@ -1,0 +1,1668 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="google" content="notranslate" />
+  <title>CookieLink</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+      overscroll-behavior: none;
+      -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+      text-rendering: optimizeLegibility;
+      font-family: "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+      font-size: 13px; line-height: 1.35; color: #2a2927;
+      background: #e6e4e1;
+      cursor: default; user-select: none; -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    img, svg { -webkit-user-drag: none; }
+    :focus { outline: none; }
+    button { font: inherit; color: inherit; background: none; border: none; padding: 0; margin: 0; cursor: pointer; }
+    input, textarea, select { font: inherit; color: inherit; }
+    input:not([type="checkbox"]):not([type="radio"]), textarea { cursor: text; }
+    select { cursor: pointer; }
+    .app, .app *:not(input):not(textarea):not(select) { cursor: default; }
+    .app button, .app select, .app input[type="range"] { cursor: pointer; }
+
+    .scroll-y {
+      overflow-y: auto; max-height: 62vh;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(0,0,0,0.2) transparent;
+    }
+    .scroll-y::-webkit-scrollbar { width: 4px; }
+    .scroll-y::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.18); border-radius: 99px; }
+
+    .peers-scroll-y {
+      flex: 1;
+      min-height: 0;
+      max-height: none !important;
+      margin-top: 6px;
+    }
+
+    .connect-compact {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(0,0,0,0.06);
+    }
+
+    .mixer-footer {
+      flex-shrink: 0;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(0,0,0,0.06);
+    }
+    .mixer-footer-row {
+      display: flex;
+      flex-direction: row;
+      flex-wrap: wrap;
+      align-items: stretch;
+      gap: 12px;
+      width: 100%;
+    }
+    .mixer-sliders-col {
+      flex: 1 1 0;
+      min-width: 0;
+      width: 100%;
+    }
+    .mixer-monitor-btn.is-on {
+      background: #2f2e2c;
+      color: #f5f3f0;
+      border-color: rgba(0,0,0,0.25);
+    }
+    .mixer-master-meter-col {
+      flex: 0 0 74px;
+      min-width: 68px;
+      max-width: 78px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+    }
+    .mixer-footer-extras { margin-top: 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    #btn-send-mute.is-on {
+      background: rgba(180,80,70,0.18);
+      color: #5a2820;
+      border-color: rgba(120,40,30,0.15);
+    }
+
+    .meter-block-title { font-size: 11px; color: rgba(42,41,39,0.5); margin-bottom: 4px; }
+    .meter-flags { display: inline-flex; gap: 3px; margin-left: 3px; vertical-align: middle; }
+    .meter-flag {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 20px; height: 13px; padding: 0 3px; border-radius: 4px;
+      font-size: 8px; line-height: 1; font-weight: 650;
+      color: rgba(42,41,39,0.34); background: rgba(0,0,0,0.045);
+    }
+    .meter-flag.is-on { color: #3d5238; background: rgba(120,150,110,0.22); }
+    .meter-flag--clip.is-on { color: #6a2d24; background: rgba(180,80,70,0.22); }
+    .meter-pair { display: flex; gap: 8px; align-items: stretch; height: 56px; }
+    .meter-pair--compact { height: 56px; gap: 8px; }
+    .meter-col {
+      flex: 1; position: relative; background: rgba(0,0,0,0.07); border-radius: 6px;
+      overflow: hidden; min-width: 18px;
+    }
+    .meter-fill {
+      position: absolute; left: 0; right: 0; bottom: 0; height: 0%;
+      background: linear-gradient(180deg, #9aad98, #5a6b58);
+      border-radius: 0 0 6px 6px;
+      transition: none;
+    }
+    .meter-ch-label {
+      position: absolute; bottom: 3px; left: 0; right: 0; text-align: center;
+      font-size: 9px; color: rgba(42,41,39,0.38); pointer-events: none;
+    }
+    .mixer-master-meter-col .meter-block-title { text-align: center; white-space: nowrap; font-size: 10px; }
+    .mixer-master-meter-col .meter-pair--compact { height: 48px; gap: 5px; }
+    .mixer-master-meter-col .meter-col { min-width: 14px; }
+
+    .peer-meter-pair { width: 36px; flex-shrink: 0; height: 44px; gap: 5px; margin-top: 0; }
+    .peer-meter-pair .meter-col { min-width: 8px; border-radius: 4px; }
+    .peer-meter-pair .meter-fill { border-radius: 0 0 4px 4px; }
+
+    .peer-net { font-size: 10px; color: rgba(42,41,39,0.45); line-height: 1.35; }
+    .peer-delay { font-size: 10px; color: rgba(42,41,39,0.42); line-height: 1.25; margin-top: 1px; }
+    .peer-relay { font-size: 10px; color: rgba(42,41,39,0.43); line-height: 1.25; margin-top: 1px; }
+    .peer-relay.is-warn { color: #6a3b24; }
+    .peer-vol-meter-wrap {
+      display: flex;
+      flex-direction: row;
+      align-items: flex-end;
+      justify-content: flex-start;
+      flex-wrap: nowrap;
+      gap: 10px;
+      flex: 1 1 340px;
+      min-width: 0;
+      max-width: none;
+      box-sizing: border-box;
+    }
+    .peer-ctrl--vol-slim {
+      flex: 1 1 290px;
+      min-width: 180px;
+      max-width: none;
+      width: auto;
+    }
+    .peer-vol-range { width: 100%; }
+    .peer-vol-range__cap {
+      display: block;
+      text-align: center;
+      float: none;
+      font-size: 11px;
+      color: rgba(42,41,39,0.55);
+      margin-bottom: 2px;
+      line-height: 1.25;
+      pointer-events: none;
+      user-select: none;
+    }
+    .peer-ctrl--vol-slim input[type="range"] { height: 28px; width: 100%; }
+
+    .app {
+      display: flex; flex-direction: column; height: 100vh; width: 100vw;
+      background:
+        radial-gradient(900px 480px at 10% -10%, rgba(255,255,255,0.5), transparent 50%),
+        linear-gradient(168deg, #eceae7, #dfdcd7);
+    }
+
+    .titlebar {
+      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 14px 0 12px; height: 50px;
+      border-bottom: 1px solid rgba(0,0,0,0.06);
+      /* backdrop-filter breaks some embedded WKWebView builds (blank / white page) */
+      background: rgba(252,251,249,0.92);
+      -webkit-app-region: drag; app-region: drag;
+    }
+    .titlebar .tb-tools, .titlebar button { -webkit-app-region: no-drag; app-region: no-drag; }
+
+    .tb-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .tb-dots { display: flex; gap: 7px; padding-left: 8px; }
+    .tb-dot { width: 10px; height: 10px; border-radius: 50%; box-shadow: 0 0 0 1px rgba(0,0,0,0.06) inset; }
+    .tb-dot--r { background: #d4a090; } .tb-dot--y { background: #c9b89a; } .tb-dot--g { background: #a8b89e; }
+    .tb-brand { font-weight: 650; letter-spacing: -0.03em; font-size: 15px; }
+    .tb-sub { font-size: 10px; color: rgba(42,41,39,0.45); margin-top: 1px; }
+
+    .tb-tools { display: flex; align-items: center; gap: 6px; position: relative; }
+
+    .icon-btn {
+      width: 38px; height: 38px; border-radius: 11px;
+      display: grid; place-items: center;
+      border: 1px solid rgba(0,0,0,0.06);
+      background: rgba(255,255,255,0.55);
+      font-size: 17px; line-height: 1;
+      transition: transform 0.25s cubic-bezier(0.22,1,0.36,1), background 0.2s ease, box-shadow 0.2s ease;
+    }
+    .icon-btn:hover { transform: scale(1.04); box-shadow: 0 8px 20px rgba(0,0,0,0.06); }
+    .icon-btn:active { transform: scale(0.96); }
+    .icon-btn.is-active {
+      background: rgba(42,41,39,0.88); color: #faf8f5;
+      border-color: rgba(0,0,0,0.12);
+      box-shadow: 0 10px 24px rgba(0,0,0,0.15);
+    }
+    .icon-btn[title] { cursor: pointer; }
+
+    .body { flex: 1; min-height: 0; padding: 16px 18px 20px; overflow: hidden; }
+    .layout {
+      width: 100%;
+      max-width: none;
+      margin: 0 auto;
+      height: 100%;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+
+    .card {
+      border-radius: 16px;
+      border: 1px solid rgba(0,0,0,0.055);
+      background: rgba(252,251,249,0.88);
+      box-shadow: 0 1px 0 rgba(255,255,255,0.65) inset, 0 14px 40px rgba(0,0,0,0.055);
+      padding: 14px 16px;
+    }
+    .card--grow { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+
+    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .row-between { justify-content: space-between; }
+    .status-pill {
+      font-size: 11px; padding: 5px 10px; border-radius: 999px;
+      background: rgba(0,0,0,0.05); color: rgba(42,41,39,0.55);
+    }
+    .status-pill.is-live { background: rgba(120,150,110,0.2); color: #3d5238; }
+
+    h1 { margin: 0; font-size: 16px; font-weight: 650; letter-spacing: -0.02em; }
+    .hint { margin: 6px 0 0; font-size: 11px; color: rgba(42,41,39,0.48); line-height: 1.45; }
+
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    @media (max-width: 560px) { .grid2 { grid-template-columns: 1fr; } }
+
+    .connect-fields {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+      align-items: start;
+    }
+    .connect-fields__main { display: flex; flex-direction: column; gap: 10px; }
+    @media (max-width: 560px) { .connect-fields { grid-template-columns: 1fr; } }
+
+    .field label { display: block; font-size: 11px; color: rgba(42,41,39,0.5); margin-bottom: 4px; }
+    .input, .select {
+      width: 100%; border-radius: 10px; padding: 9px 11px;
+      border: 1px solid rgba(0,0,0,0.07); background: rgba(255,255,255,0.78);
+    }
+
+    .seg {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 2px;
+      padding: 3px; border-radius: 10px; background: rgba(0,0,0,0.055);
+      border: 1px solid rgba(0,0,0,0.06);
+    }
+    .seg button {
+      min-height: 31px; height: auto; padding: 6px 4px; border-radius: 8px; font-size: 11px;
+      line-height: 1.25; text-align: center; color: rgba(42,41,39,0.58);
+    }
+    .seg button.is-on {
+      background: rgba(255,255,255,0.86); color: #2a2927;
+      box-shadow: 0 1px 0 rgba(255,255,255,0.8) inset, 0 4px 12px rgba(0,0,0,0.08);
+    }
+    .server-address-field { margin-top: 8px; }
+
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: 9px 16px; border-radius: 999px; font-size: 12px;
+      border: 1px solid rgba(0,0,0,0.07);
+      background: rgba(255,255,255,0.65);
+      transition: transform 0.2s cubic-bezier(0.22,1,0.36,1), opacity 0.2s ease;
+    }
+    .btn:hover { transform: translateY(-1px); }
+    .btn:active { transform: scale(0.98); }
+    .btn--dark { background: #2f2e2c; color: #f5f3f0; border-color: rgba(0,0,0,0.2); }
+    .btn--ghost { background: rgba(255,255,255,0.4); }
+    .btn--danger { background: rgba(180,80,70,0.12); color: #5a2820; border-color: rgba(120,40,30,0.1); }
+
+    .linkish { font-size: 11px; color: rgba(42,41,39,0.55); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+
+    .slider-line { display: grid; grid-template-columns: 88px 1fr 36px; gap: 8px; align-items: center; margin-top: 8px; font-size: 11px; color: rgba(42,41,39,0.55); }
+    .slider-line input[type="range"] { width: 100%; accent-color: #5a6b58; }
+    .slider-line--compact {
+      grid-template-columns: 52px minmax(0, 1fr) 38px;
+      gap: 8px;
+      margin-top: 6px;
+      font-size: 11px;
+    }
+
+    .peer-line {
+      display: flex; flex-direction: column; gap: 10px;
+      padding: 10px 12px; border-radius: 10px; margin-top: 4px;
+      background: rgba(255,255,255,0.45); border: 1px solid rgba(0,0,0,0.05);
+      font-size: 11px;
+      width: 100%;
+      align-items: stretch;
+      text-align: left;
+    }
+    .peer-row1 {
+      display: flex;
+      flex-direction: row;
+      flex-wrap: nowrap;
+      align-items: center;
+      justify-content: flex-start;
+      align-content: center;
+      gap: 10px 12px;
+      width: 100%;
+      box-sizing: border-box;
+      min-width: 0;
+    }
+    .peer-row1-meta {
+      flex: 0 1 170px;
+      min-width: 0;
+      max-width: 190px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      text-align: left;
+    }
+    .peer-row1-ctrls {
+      display: flex;
+      flex-direction: row;
+      flex-wrap: nowrap;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 8px 10px;
+      flex: 1 1 0;
+      min-width: 0;
+      overflow-x: visible;
+      overflow-y: visible;
+      -webkit-overflow-scrolling: touch;
+    }
+    .peer-row1-actions {
+      display: flex;
+      flex-direction: row;
+      flex-wrap: nowrap;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 8px;
+      flex: 0 0 auto;
+      max-width: none;
+    }
+    .peer-adv-toggle--row {
+      flex: 0 0 auto;
+      align-self: center;
+      margin-top: 0;
+      white-space: nowrap;
+      padding: 6px 10px;
+      min-width: 72px;
+      height: 30px;
+    }
+    .peer-actions {
+      display: flex;
+      flex-direction: row;
+      flex-wrap: nowrap;
+      gap: 10px;
+      align-items: center;
+    }
+    .peer-actions .mini-btn {
+      padding: 6px 10px;
+      min-width: 44px;
+      height: 30px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .peer-row1-actions > .mini-btn {
+      padding: 6px 14px;
+      white-space: nowrap;
+    }
+    .peer-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .peer-lat { font-size: 11px; color: rgba(42,41,39,0.5); line-height: 1.35; }
+    .mini-btn { padding: 4px 8px; border-radius: 8px; font-size: 11px; border: 1px solid rgba(0,0,0,0.08); background: rgba(255,255,255,0.7); cursor: pointer; }
+    .peer-actions .mini-btn.is-on {
+      background: #2f2e2c;
+      color: #f5f3f0;
+      border-color: rgba(0,0,0,0.25);
+    }
+    .peer-row1-actions > .mini-btn.is-on {
+      background: rgba(42,41,39,0.22);
+      color: rgba(42,41,39,0.88);
+      border-color: rgba(0,0,0,0.12);
+    }
+    .peer-controls { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+    .peer-adv {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 7px 10px; min-width: 0;
+      padding-top: 6px; margin-top: 2px; border-top: 1px solid rgba(0,0,0,0.06);
+      text-align: left;
+      width: 100%;
+      max-width: 640px;
+      margin-left: auto;
+      margin-right: auto;
+      box-sizing: border-box;
+    }
+    .peer-adv[hidden] { display: none !important; }
+    .peer-ctrl { min-width: 0; }
+    .peer-ctrl label { display: block; font-size: 10px; color: rgba(42,41,39,0.46); margin-bottom: 3px; }
+    .peer-ctrl input[type="range"] { width: 100%; accent-color: #5a6b58; }
+    .peer-ctrl .select { padding: 6px 8px; border-radius: 8px; font-size: 11px; }
+    .peer-value { float: right; font-size: 10px; color: rgba(42,41,39,0.42); }
+    @media (max-width: 640px) {
+      .peer-row1 { flex-wrap: wrap; align-items: flex-start; }
+      .peer-row1-meta { flex-basis: 100%; }
+      .peer-row1-ctrls { width: 100%; justify-content: flex-start; flex-wrap: wrap; }
+      .peer-vol-meter-wrap { flex-basis: min(100%, 260px); }
+      .peer-adv { grid-template-columns: 1fr; }
+    }
+
+    /* 二级气泡 */
+    .popover-backdrop {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.12);
+      opacity: 0; pointer-events: none; transition: opacity 0.22s ease;
+      z-index: 40;
+    }
+    .popover-backdrop.is-open { opacity: 1; pointer-events: auto; }
+
+    .popover {
+      position: fixed; z-index: 50;
+      width: min(360px, calc(100vw - 24px));
+      max-height: min(86vh, 640px);
+      border-radius: 16px;
+      border: 1px solid rgba(0,0,0,0.07);
+      background: rgba(252,251,249,0.97);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.14), 0 1px 0 rgba(255,255,255,0.8) inset;
+      opacity: 0; transform: scale(0.96) translateY(-6px); pointer-events: none;
+      transition: opacity 0.22s cubic-bezier(0.22,1,0.36,1), transform 0.28s cubic-bezier(0.22,1,0.36,1);
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .popover.is-open { opacity: 1; transform: scale(1) translateY(0); pointer-events: auto; }
+
+    .popover__head {
+      padding: 12px 14px 10px;
+      border-bottom: 1px solid rgba(0,0,0,0.06);
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    }
+    .popover__title { font-weight: 650; font-size: 14px; }
+    .popover__close { width: 30px; height: 30px; border-radius: 8px; cursor: pointer; font-size: 18px; line-height: 1; color: rgba(0,0,0,0.35); }
+    .popover__close:hover { background: rgba(0,0,0,0.05); }
+    .popover__body { padding: 12px 14px 14px; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+    .popover__body.scroll-y {
+      flex: 1 1 auto;
+      max-height: calc(86vh - 54px);
+      overflow-x: hidden;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+    }
+    #popover-settings { width: min(390px, calc(100vw - 24px)); }
+
+    .notice-backdrop {
+      position: fixed; inset: 0; z-index: 80;
+      display: grid; place-items: center;
+      padding: 20px;
+      background: rgba(42,41,39,0.22);
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.22s ease;
+    }
+    .notice-backdrop.is-open { opacity: 1; pointer-events: auto; }
+    .notice-backdrop[hidden] { display: none !important; }
+    .notice-card {
+      width: min(380px, calc(100vw - 34px));
+      border-radius: 16px;
+      border: 1px solid rgba(0,0,0,0.07);
+      background: rgba(252,251,249,0.98);
+      box-shadow: 0 24px 70px rgba(0,0,0,0.18), 0 1px 0 rgba(255,255,255,0.82) inset;
+      transform: translateY(8px) scale(0.97);
+      transition: transform 0.28s cubic-bezier(0.22,1,0.36,1);
+      overflow: hidden;
+    }
+    .notice-backdrop.is-open .notice-card { transform: translateY(0) scale(1); }
+    .notice-card__head {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      padding: 14px 16px 10px;
+      border-bottom: 1px solid rgba(0,0,0,0.06);
+    }
+    .notice-card__title { font-size: 15px; font-weight: 650; }
+    .notice-card__body {
+      padding: 14px 16px 4px;
+      color: rgba(42,41,39,0.72);
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-word;
+      user-select: text;
+      -webkit-user-select: text;
+    }
+    .notice-card__foot { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 16px 16px; }
+    .notice-card.is-error .notice-card__title { color: #7b3428; }
+
+    .toggle-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      padding: 9px 0; border-bottom: 1px solid rgba(0,0,0,0.05); font-size: 12px;
+    }
+    .toggle-row:last-child { border-bottom: none; }
+    .sw { width: 44px; height: 26px; border-radius: 99px; padding: 3px; background: rgba(0,0,0,0.08); border: 1px solid rgba(0,0,0,0.06); flex-shrink: 0; transition: background 0.3s ease; }
+    .sw__k { width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 3px 10px rgba(0,0,0,0.12); transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1); }
+    .sw.is-on { background: rgba(90,107,88,0.35); }
+    .sw.is-on .sw__k { transform: translateX(18px); }
+
+    .sec-title { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(42,41,39,0.38); margin: 10px 0 6px; }
+    .sec-title:first-child { margin-top: 0; }
+  </style>
+</head>
+<body class="app">
+  <header class="titlebar">
+    <div class="tb-left">
+      <div class="tb-dots" aria-hidden="true"><span class="tb-dot tb-dot--r"></span><span class="tb-dot tb-dot--y"></span><span class="tb-dot tb-dot--g"></span></div>
+      <div>
+        <div class="tb-brand">CookieLink</div>
+        <div class="tb-sub">低延迟点对点音频</div>
+      </div>
+    </div>
+    <div class="tb-tools">
+      <button type="button" class="icon-btn js-metro" id="btn-metro" title="节拍器：左键开关，右键设置" aria-pressed="false">♪</button>
+      <button type="button" class="icon-btn js-popover-trigger js-audio-settings-only" id="btn-audio" data-popover="audio" title="音频" hidden>⌁</button>
+      <button type="button" class="icon-btn js-popover-trigger" data-popover="record" title="录音">●</button>
+      <button type="button" class="icon-btn js-popover-trigger" data-popover="settings" title="设置">⚙</button>
+      <button type="button" class="icon-btn js-popover-trigger" data-popover="more" title="更多">⋯</button>
+    </div>
+  </header>
+
+  <div class="body">
+    <div class="layout">
+      <div class="card" id="connect-card">
+        <div class="row row-between">
+          <h1>连接</h1>
+          <span class="status-pill" id="ui-status">未连接</span>
+        </div>
+        <div id="connect-collapsible">
+          <p class="hint">首选 UDP 点对点延迟最低，但在复杂网络（如部分公司网、多层 NAT）下可能连不上；若始终无法连接，请改用 TCP 服务器中继。</p>
+          <div class="connect-fields" style="margin-top:10px;">
+            <div class="connect-fields__main">
+              <div class="field"><label for="f-name">您的显示名称</label><input id="f-name" class="input" data-bind="connect.displayName" type="text" autocomplete="off" placeholder="昵称" /></div>
+              <div class="field"><label for="f-pass">密码（可选）</label><input id="f-pass" class="input" data-bind="connect.password" type="password" autocomplete="off" /></div>
+              <div class="field"><label for="f-group">群组名称</label><input id="f-group" class="input" data-bind="connect.groupName" type="text" autocomplete="off" placeholder="群组名称" /></div>
+            </div>
+            <div class="field"><label>传输方式</label>
+              <div class="seg" id="transport-seg">
+                <button type="button" data-transport-mode="0">UDP点对点</button>
+                <button type="button" data-transport-mode="1">TCP服务器中继</button>
+              </div>
+              <div class="field server-address-field"><label for="f-server">服务器地址</label><input id="f-server" class="input" data-bind="connect.serverUrl" type="text" autocomplete="off" placeholder="例如 aoo.vsthome.cn:10998" /></div>
+            </div>
+          </div>
+          <div class="row" style="margin-top:12px;">
+            <button type="button" class="btn btn--dark" data-action="joinGroup">加入群组</button>
+            <button type="button" class="btn btn--ghost" data-action="disconnect">断开</button>
+            <span class="linkish" data-action="pasteInfo">粘贴连接信息</span>
+            <span class="linkish" data-action="copyInfo">复制连接信息</span>
+            <span class="linkish" data-action="randomGroup">随机群组名</span>
+          </div>
+        </div>
+        <div class="connect-compact" id="connect-compact" hidden>
+          <div class="row" style="justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <p class="hint" style="margin:0; flex:1; min-width: 160px;" id="connect-compact-line">已加入群组。</p>
+            <div class="row" style="gap:8px;">
+              <button type="button" class="btn btn--ghost" data-action="toggleConnectDetails">连接设置</button>
+              <button type="button" class="btn btn--ghost" data-action="disconnect">断开</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card card--grow">
+        <div class="row row-between" style="margin-bottom:4px;">
+          <h1>混音</h1>
+        </div>
+        <p class="hint" id="mix-hint" style="margin-top:0;">连接后成员显示于此。每位成员展示网络速率、延迟（Ping / 收·发）及接收立体声 RMS 电平；音量条上方居中显示 Level（dB）。缓冲与码率在「网络与音质」中展开。</p>
+        <div class="scroll-y peers-scroll-y" id="peers-scroll"></div>
+        <div class="mixer-footer" id="mixer-footer">
+          <div class="mixer-footer-row">
+            <div class="mixer-sliders-col" id="mixer-sliders">
+              <div class="slider-line slider-line--compact"><span>输入</span><input type="range" min="-48" max="12" step="0.5" value="0" data-bind="mixer.inLevel" data-unit="db" /><span data-v="mixer.inLevel">0.0 dB</span></div>
+              <div class="slider-line slider-line--compact"><span>输出</span><input type="range" min="-48" max="12" step="0.5" value="0" data-bind="mixer.outLevel" data-unit="db" data-db-max="6" /><span data-v="mixer.outLevel">0.0 dB</span></div>
+            </div>
+            <div class="mixer-master-meter-col" id="master-meter-block">
+              <div class="meter-block-title">总输出 <span style="font-weight:400;color:rgba(42,41,39,0.42);">RMS</span><span class="meter-flags"><span class="meter-flag" id="master-limiter-flag">LIM</span><span class="meter-flag meter-flag--clip" id="master-clip-flag">CLIP</span></span></div>
+              <div class="meter-pair meter-pair--compact" aria-hidden="true">
+                <div class="meter-col"><div class="meter-fill" id="master-meter-L"></div><span class="meter-ch-label">L</span></div>
+                <div class="meter-col"><div class="meter-fill" id="master-meter-R"></div><span class="meter-ch-label">R</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="mixer-footer-extras">
+            <button type="button" class="mini-btn" id="btn-send-mute" data-action="toggleMainSendMute">闭麦</button>
+            <button type="button" class="mini-btn mixer-monitor-btn" id="btn-mixer-monitor" title="左键开启/关闭监听，右键设置监听音量" aria-pressed="false">监听</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notice-backdrop" id="notice-backdrop" aria-hidden="true" hidden>
+    <div class="notice-card" id="notice-card" role="dialog" aria-modal="true" aria-labelledby="notice-title">
+      <div class="notice-card__head">
+        <span class="notice-card__title" id="notice-title">提示</span>
+        <button type="button" class="popover__close js-notice-close" aria-label="关闭">×</button>
+      </div>
+      <div class="notice-card__body" id="notice-body"></div>
+      <div class="notice-card__foot">
+        <button type="button" class="btn btn--dark js-notice-close">知道了</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="popover-backdrop" id="popover-backdrop" aria-hidden="true"></div>
+
+  <div class="popover" id="popover-settings" role="dialog" aria-modal="true" aria-labelledby="pop-settings-title" hidden>
+    <div class="popover__head">
+      <span class="popover__title" id="pop-settings-title">设置</span>
+      <button type="button" class="popover__close js-popover-close" aria-label="关闭">×</button>
+    </div>
+    <div class="popover__body scroll-y">
+      <div class="sec-title">网络与质量</div>
+      <div class="field" style="margin-top:8px;"><label>默认自动网络缓冲</label>
+        <select class="select" id="sel-buffer-mode" data-bind="options.bufferModeIndex" title="与主程序选项一致：手动 / 仅自动增大 / 自动 / 初始自动">
+          <option value="0">手动</option>
+          <option value="1">自动上升</option>
+          <option value="2">自动</option>
+          <option value="3">初始自动</option>
+        </select>
+      </div>
+      <div class="field" style="margin-top:8px;"><label>默认发送格式</label>
+        <select class="select" id="sel-send-format" data-bind="options.sendFormatIndex" title="匹配输入通道数 / 单声道 / 立体声">
+          <option value="0">匹配输入通道数</option>
+          <option value="1">发送单声道</option>
+          <option value="2">发送立体声</option>
+        </select>
+      </div>
+      <div class="field" style="margin-top:8px;"><label>默认发送质量</label>
+        <select class="select" id="sel-send-quality" data-bind="options.sendQualityIndex" title="Opus 码率越低带宽越小但延迟与 CPU 负担可能增加；PCM 无压缩延迟最低"></select>
+      </div>
+      <p class="hint" style="margin-top:6px;">发送质量列表由引擎按当前编译选项填充（含 64/48 kbps 等及 PCM）。</p>
+      <div class="slider-line" style="grid-template-columns:120px 1fr 40px;margin-top:10px;"><span>默认抖动缓冲</span><input type="range" min="0" max="200" value="20" data-bind="options.jitterMs" /><span data-v="options.jitterMs">20</span></div>
+
+      <div class="sec-title">行为</div>
+      <div class="toggle-row js-pop-toggle" data-tkey="dynResample"><span>动态重采样</span><div class="sw" role="switch"><div class="sw__k"></div></div></div>
+      <div class="toggle-row js-pop-toggle" data-tkey="reconnect"><span>自动重新连接上次群组</span><div class="sw" role="switch"><div class="sw__k"></div></div></div>
+      <div class="toggle-row js-pop-toggle" data-tkey="checkUpdate"><span>自动检查更新</span><div class="sw is-on" role="switch"><div class="sw__k"></div></div></div>
+      <div class="toggle-row js-pop-toggle js-audio-settings-only" data-tkey="bluetooth" hidden><span>允许蓝牙输入</span><div class="sw" role="switch"><div class="sw__k"></div></div></div>
+      <div class="toggle-row js-pop-toggle" data-tkey="sliderSnap"><span>滑块捕捉到单击位置</span><div class="sw" role="switch"><div class="sw__k"></div></div></div>
+      <div class="toggle-row js-pop-toggle" data-tkey="debugMode"><span>调试模式</span><div class="sw" role="switch"><div class="sw__k"></div></div></div>
+    </div>
+  </div>
+
+  <div class="popover" id="popover-audio" role="dialog" aria-modal="true" aria-labelledby="pop-audio-title" hidden>
+    <div class="popover__head">
+      <span class="popover__title" id="pop-audio-title">音频</span>
+      <button type="button" class="popover__close js-popover-close" aria-label="关闭">×</button>
+    </div>
+    <div class="popover__body scroll-y">
+      <div class="field"><label>音频设备类型</label><select class="select" id="sel-audio-type" data-bind="audio.deviceType"></select></div>
+      <div class="field" style="margin-top:8px;"><label>输入设备</label><select class="select" id="sel-audio-input" data-bind="audio.inputDevice"></select></div>
+      <div class="field" style="margin-top:8px;"><label>输出设备</label><select class="select" id="sel-audio-output" data-bind="audio.outputDevice"></select></div>
+      <div class="grid2" style="margin-top:8px;">
+        <div class="field"><label>采样率</label><select class="select" id="sel-audio-rate" data-bind="audio.sampleRate"></select></div>
+        <div class="field"><label>缓冲区</label><select class="select" id="sel-audio-buffer" data-bind="audio.buffer"></select></div>
+      </div>
+      <div class="row" style="margin-top:12px;">
+        <button type="button" class="btn btn--ghost" data-action="audioPanel">控制面板</button>
+        <button type="button" class="btn btn--ghost" data-action="audioTest">测试音</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="popover" id="popover-record" role="dialog" aria-modal="true" aria-labelledby="pop-record-title" hidden>
+    <div class="popover__head">
+      <span class="popover__title" id="pop-record-title">录音</span>
+      <button type="button" class="popover__close js-popover-close" aria-label="关闭">×</button>
+    </div>
+    <div class="popover__body scroll-y">
+      <div class="row row-between">
+        <span class="status-pill" id="record-status">未录音</span>
+        <button type="button" class="btn btn--dark" id="btn-record-toggle" data-action="toggleRecord">开始录音</button>
+      </div>
+      <div class="field" style="margin-top:12px;"><label>录制格式</label><select class="select" id="sel-record-format" data-bind="record.format"><option>FLAC</option><option>WAV</option><option>OGG</option></select></div>
+      <div class="field" style="margin-top:8px;"><label>保存位置</label><div class="input" id="record-folder" style="min-height:36px;word-break:break-all;">未设置</div></div>
+      <div class="row" style="margin-top:12px;">
+        <button type="button" class="btn btn--ghost" data-action="chooseRecordFolder">选择文件夹</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="popover" id="popover-metro" role="dialog" aria-modal="true" aria-labelledby="pop-metro-title" hidden>
+    <div class="popover__head">
+      <span class="popover__title" id="pop-metro-title">节拍器</span>
+      <button type="button" class="popover__close js-popover-close" aria-label="关闭">×</button>
+    </div>
+    <div class="popover__body scroll-y">
+      <p class="hint" style="margin-top:0;">左键标题栏 ♪ 开关节拍器；此处调节参数（开启后生效）。</p>
+      <div class="slider-line"><span>节拍器增益</span><input type="range" min="0" max="100" value="60" data-bind="metro.gain" /><span data-v="metro.gain">60</span></div>
+      <div class="slider-line"><span>节拍器速度</span><input type="range" min="10" max="400" value="120" data-bind="metro.tempo" /><span data-v="metro.tempo">120</span></div>
+      <div class="toggle-row js-pop-toggle" data-tkey="metroSend"><span>发送节拍器音频</span><div class="sw" role="switch"><div class="sw__k"></div></div></div>
+      <div class="toggle-row js-pop-toggle" data-tkey="metroRecorded"><span>节拍器录入总混音</span><div class="sw" role="switch"><div class="sw__k"></div></div></div>
+      <div class="toggle-row js-pop-toggle" data-tkey="metroSyncHost"><span>同步主机</span><div class="sw" role="switch"><div class="sw__k"></div></div></div>
+    </div>
+  </div>
+
+  <div class="popover" id="popover-monitor" role="dialog" aria-modal="true" aria-labelledby="pop-monitor-title" hidden>
+    <div class="popover__head">
+      <span class="popover__title" id="pop-monitor-title">监听音量</span>
+      <button type="button" class="popover__close js-popover-close" aria-label="关闭">×</button>
+    </div>
+    <div class="popover__body scroll-y">
+      <div class="slider-line"><span>监听电平</span><input type="range" min="-48" max="0" step="0.5" value="0" data-bind="mixer.monitorLevel" data-unit="db" /><span data-v="mixer.monitorLevel">0.0 dB</span></div>
+    </div>
+  </div>
+
+  <div class="popover" id="popover-more" role="dialog" aria-modal="true" aria-labelledby="pop-more-title" hidden>
+    <div class="popover__head">
+      <span class="popover__title" id="pop-more-title">更多</span>
+      <button type="button" class="popover__close js-popover-close" aria-label="关闭">×</button>
+    </div>
+    <div class="popover__body scroll-y">
+      <div class="sec-title">主混响</div>
+      <div class="toggle-row js-pop-toggle" data-tkey="reverbOn"><span>启用主混响</span><div class="sw" role="switch"><div class="sw__k"></div></div></div>
+      <div class="slider-line"><span>混响电平</span><input type="range" min="0" max="100" value="22" data-bind="reverb.level" /><span data-v="reverb.level">22</span></div>
+
+      <div class="sec-title">文件</div>
+      <div class="row" style="margin-top:4px;">
+        <button type="button" class="btn btn--ghost" data-action="openFile">打开音频文件</button>
+      </div>
+
+      <div class="sec-title">聊天</div>
+      <div class="field"><label>消息</label><textarea class="input" style="min-height:56px;resize:vertical;" data-bind="chat.draft" placeholder="在此输入消息…"></textarea></div>
+      <button type="button" class="btn btn--dark" style="margin-top:8px;" data-action="chatSend">发送</button>
+    </div>
+  </div>
+
+  <script>
+(function () {
+  'use strict';
+  var LS_DEBUG_MODE = 'cookielink_v2_shell_debug_mode';
+  function loadDebugMode() {
+    try { return localStorage.getItem(LS_DEBUG_MODE) === '1'; } catch (e) { return false; }
+  }
+  function saveDebugMode(on) {
+    try { localStorage.setItem(LS_DEBUG_MODE, on ? '1' : '0'); } catch (e) {}
+  }
+  document.addEventListener('contextmenu', function (e) {
+    if (e.target && e.target.closest && e.target.closest('#btn-metro')) return;
+    if (e.target && e.target.closest && e.target.closest('#btn-mixer-monitor')) return;
+    e.preventDefault();
+  });
+
+  var state = {
+    connect: { displayName: '', groupName: '', password: '', serverUrl: '' },
+    mixer: { inLevel: 0, monitorLevel: 0, outLevel: 0, monitorEnabled: true },
+    transport: { mode: '0' },
+    options: { bufferModeIndex: '2', sendFormatIndex: '2', sendQualityIndex: '4', sendQualityOptions: [], jitterMs: 20 },
+    audio: { available: false, deviceType: '', inputDevice: '', outputDevice: '', sampleRate: '48000', buffer: '128', deviceTypeOptions: [], inputDeviceOptions: [], outputDeviceOptions: [], sampleRateOptions: [], bufferOptions: [] },
+    metro: { gain: 60, tempo: 120, on: false },
+    reverb: { level: 22 },
+    record: { format: 'FLAC', isRecording: false, elapsed: 0, folder: '' },
+    chat: { draft: '' },
+    toggles: { dynResample: false, reconnect: false, checkUpdate: true, bluetooth: false, sliderSnap: false, debugMode: loadDebugMode(), metroSend: false, metroRecorded: false, metroSyncHost: false, reverbOn: false, mainSendMuted: false },
+    sessionActive: false,
+    meters: { masterL: 0, masterR: 0, masterLimiter: false, masterClip: false },
+    relay: { active: false, congested: false, queueMs: 0, queueFrames: 0, queueBytes: 0, droppedQueued: 0, droppedStale: 0, writeMs: 0, avgWriteMs: 0, maxWriteMs: 0, text: '' }
+  };
+
+  function postNativeToHost(ev, payload) {
+    try {
+      var s = JSON.stringify({ ev: ev, detail: payload });
+      var b64 = btoa(unescape(encodeURIComponent(s)));
+      var f = document.createElement('iframe');
+      f.setAttribute('style', 'position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;border:0');
+      f.src = 'cookielink://x?b=' + encodeURIComponent(b64);
+      (document.body || document.documentElement).appendChild(f);
+      setTimeout(function () { try { f.remove(); } catch (e) {} }, 400);
+    } catch (e) {}
+  }
+
+  function deepSet(o, path, v) {
+    var p = path.split('.');
+    var c = o;
+    for (var i = 0; i < p.length - 1; i++) {
+      if (!c[p[i]] || typeof c[p[i]] !== 'object') c[p[i]] = {};
+      c = c[p[i]];
+    }
+    c[p[p.length - 1]] = v;
+  }
+  function deepGet(o, path) {
+    var p = path.split('.');
+    var c = o;
+    for (var i = 0; i < p.length; i++) { if (c == null) return undefined; c = c[p[i]]; }
+    return c;
+  }
+  function emit(name, detail) {
+    window.dispatchEvent(new CustomEvent(name, { detail: detail }));
+    if (name === 'cookielink:change') window.dispatchEvent(new CustomEvent('cookielink:change', { detail: detail }));
+    if (name === 'cookielink:action') window.dispatchEvent(new CustomEvent('cookielink:action', { detail: detail }));
+    if (name === 'cookielink:change') postNativeToHost('change', detail);
+    if (name === 'cookielink:action') postNativeToHost('action', detail);
+  }
+
+  function displayPeerName(fullName) {
+    var name = String(fullName || '');
+    return state.toggles && state.toggles.debugMode ? name : name.replace(/\s*@\d+$/, '');
+  }
+
+  function syncPeerNameDebugMode() {
+    document.querySelectorAll('.peer-name[data-full-name]').forEach(function (el) {
+      el.textContent = displayPeerName(el.getAttribute('data-full-name') || '');
+    });
+  }
+
+  function normalizeOptions(options) {
+    if (!Array.isArray(options)) return [];
+    return options.map(function (opt) {
+      if (opt && typeof opt === 'object') return { id: String(opt.id), name: String(opt.name != null ? opt.name : opt.id) };
+      return { id: String(opt), name: String(opt) };
+    }).filter(function (opt) { return opt.id.length > 0 || opt.name.length > 0; });
+  }
+
+  function setSelectOptions(selectId, options, current) {
+    var sel = document.getElementById(selectId);
+    if (!sel) return '';
+    var list = normalizeOptions(options);
+    var cur = current != null ? String(current) : sel.value;
+    if (!list.length && cur) list = [{ id: cur, name: cur }];
+    var sig = JSON.stringify(list);
+    if (sel.dataset.optionsSig !== sig) {
+      sel.innerHTML = '';
+      list.forEach(function (opt) {
+        var o = document.createElement('option');
+        o.value = opt.id;
+        o.textContent = opt.name;
+        sel.appendChild(o);
+      });
+      sel.dataset.optionsSig = sig;
+    }
+    if (document.activeElement !== sel && cur) sel.value = cur;
+    if (sel.value !== cur && sel.options.length && document.activeElement !== sel) sel.selectedIndex = 0;
+    return sel.value;
+  }
+
+  function formatElapsed(seconds) {
+    seconds = Math.max(0, Number(seconds) || 0);
+    var m = Math.floor(seconds / 60);
+    var s = Math.floor(seconds % 60);
+    return m + ':' + (s < 10 ? '0' : '') + s;
+  }
+
+  function syncRecordUi() {
+    var rec = state.record || {};
+    var status = document.getElementById('record-status');
+    var button = document.getElementById('btn-record-toggle');
+    var folder = document.getElementById('record-folder');
+    if (status) {
+      status.textContent = rec.isRecording ? ('录音中 · ' + formatElapsed(rec.elapsed)) : '未录音';
+      status.classList.toggle('is-live', !!rec.isRecording);
+    }
+    if (button) {
+      button.textContent = rec.isRecording ? '停止录音' : '开始录音';
+      button.classList.toggle('btn--danger', !!rec.isRecording);
+      button.classList.toggle('btn--dark', !rec.isRecording);
+    }
+    if (folder) folder.textContent = rec.folder || '未设置';
+  }
+
+  function syncAudioSettingsUi() {
+    var available = !!(state.audio && state.audio.available);
+    document.querySelectorAll('.js-audio-settings-only').forEach(function (el) {
+      el.hidden = !available;
+    });
+    if (!available && openId === 'popover-audio') closePopover();
+  }
+
+  function syncTransportUi() {
+    var mode = String((state.transport && state.transport.mode) || '0');
+    document.querySelectorAll('[data-transport-mode]').forEach(function (btn) {
+      btn.classList.toggle('is-on', btn.getAttribute('data-transport-mode') === mode);
+    });
+  }
+
+  function syncConnectFieldsLock() {
+    var locked = !!state.sessionActive;
+    ['f-name', 'f-pass', 'f-group', 'f-server'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.disabled = locked;
+    });
+    document.querySelectorAll('[data-transport-mode]').forEach(function (btn) {
+      btn.disabled = locked;
+      btn.style.opacity = locked ? '0.55' : '';
+    });
+  }
+
+  function syncMasterMetersFromState() {
+    var m = state.meters || {};
+    function setH(id, v) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      var t = Math.min(100, Math.max(0, (Number(v) || 0) * 100));
+      el.style.height = t + '%';
+    }
+    setH('master-meter-L', m.masterL);
+    setH('master-meter-R', m.masterR);
+    var lim = document.getElementById('master-limiter-flag');
+    if (lim) lim.classList.toggle('is-on', !!m.masterLimiter);
+    var clip = document.getElementById('master-clip-flag');
+    if (clip) clip.classList.toggle('is-on', !!m.masterClip);
+  }
+
+  var LS_MONITOR_ON = 'cookielink_v2_shell_monitor_on';
+  var LS_MONITOR_LEVEL = 'cookielink_v2_shell_monitor_level';
+  var MIXER_DB_OFF = -48;
+
+  function isMixerDbKey(key) {
+    return key === 'mixer.inLevel' || key === 'mixer.outLevel' || key === 'mixer.monitorLevel';
+  }
+
+  function formatMixerSliderValue(key, v) {
+    if (isMixerDbKey(key)) return Number(v).toFixed(1) + ' dB';
+    return String(v);
+  }
+
+  function sliderStateValue(el) {
+    var value = Number(el.value);
+    var uiMax = Number(el.max);
+    var dbMax = Number(el.getAttribute('data-db-max'));
+    if (el.getAttribute('data-unit') === 'db') {
+      if (!isNaN(dbMax) && dbMax > 0 && uiMax > 0 && value > 0) {
+        value = value * dbMax / uiMax;
+      }
+      return Math.round(value * 2) / 2;
+    }
+    return value;
+  }
+
+  function sliderUiValue(el, stateValue) {
+    var value = Number(stateValue);
+    var uiMax = Number(el.max);
+    var dbMax = Number(el.getAttribute('data-db-max'));
+    if (el.getAttribute('data-unit') === 'db' && !isNaN(dbMax) && dbMax > 0 && uiMax > 0 && value > 0) {
+      value = value * uiMax / dbMax;
+    }
+    return value;
+  }
+
+  function syncMixerMonitorUi() {
+    if (!state.mixer) return;
+    var on = !!state.mixer.monitorEnabled;
+    var btn = document.getElementById('btn-mixer-monitor');
+    if (btn) {
+      btn.classList.toggle('is-on', on);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
+  }
+
+  function setMixerMonitorEnabled(on, persist) {
+    if (!state.mixer) state.mixer = {};
+    state.mixer.monitorEnabled = !!on;
+    var currentLevel = Math.max(MIXER_DB_OFF, Math.min(0, Number(state.mixer.monitorLevel) || MIXER_DB_OFF));
+    var nextLevel = currentLevel;
+    if (on) {
+      if (currentLevel <= MIXER_DB_OFF + 0.5) {
+        try { nextLevel = Math.max(MIXER_DB_OFF + 0.5, Math.min(0, Number(localStorage.getItem(LS_MONITOR_LEVEL)) || 0)); } catch (e0) { nextLevel = 0; }
+      }
+    } else {
+      if (currentLevel > MIXER_DB_OFF + 0.5) {
+        try { localStorage.setItem(LS_MONITOR_LEVEL, String(currentLevel)); } catch (e1) {}
+      }
+      nextLevel = MIXER_DB_OFF;
+    }
+    state.mixer.monitorLevel = nextLevel;
+    document.querySelectorAll('[data-bind="mixer.monitorLevel"]').forEach(function (el) { el.value = String(nextLevel); });
+    document.querySelectorAll('[data-v="mixer.monitorLevel"]').forEach(function (el) { el.textContent = formatMixerSliderValue('mixer.monitorLevel', nextLevel); });
+    emit('cookielink:change', { key: 'mixer.monitorLevel', value: nextLevel });
+    if (persist) {
+      try { localStorage.setItem(LS_MONITOR_ON, on ? '1' : '0'); } catch (e2) {}
+    }
+    syncMixerMonitorUi();
+  }
+
+  function loadMixerMonitorEnabledFromStorage() {
+    try {
+      var s = localStorage.getItem(LS_MONITOR_ON);
+      if (s === '1') state.mixer.monitorEnabled = true;
+      else if (s === '0') state.mixer.monitorEnabled = false;
+    } catch (e1) {}
+  }
+
+  function syncConnectUI() {
+    var live = !!state.sessionActive;
+    var exp = !!window.__CookieLinkConnectExpanded;
+    var col = document.getElementById('connect-collapsible');
+    var comp = document.getElementById('connect-compact');
+    var line = document.getElementById('connect-compact-line');
+    var tbtn = document.querySelector('[data-action="toggleConnectDetails"]');
+    if (!col || !comp) return;
+    if (!live) {
+      window.__CookieLinkConnectExpanded = false;
+      col.hidden = false;
+      comp.hidden = true;
+      if (tbtn) tbtn.textContent = '连接设置';
+    } else {
+      comp.hidden = false;
+      col.hidden = !exp;
+      if (tbtn) tbtn.textContent = exp ? '收起' : '连接设置';
+      var gn = (state.connect && state.connect.groupName) ? String(state.connect.groupName) : '';
+      if (line) {
+        line.textContent = gn.length
+          ? ('已在群组「' + gn + '」· 展开连接设置可修改房间或服务器')
+          : ('已连接群组 · 展开连接设置可修改房间或服务器');
+      }
+    }
+  }
+
+  function collectTogglesFromDom() {
+    document.querySelectorAll('.js-pop-toggle').forEach(function (row) {
+      var k = row.getAttribute('data-tkey');
+      var sw = row.querySelector('.sw');
+      if (k && sw) state.toggles[k] = sw.classList.contains('is-on');
+    });
+  }
+
+  function syncPopoverToggles() {
+    document.querySelectorAll('.js-pop-toggle').forEach(function (row) {
+      var k = row.getAttribute('data-tkey');
+      var sw = row.querySelector('.sw');
+      if (!sw || state.toggles[k] === undefined) return;
+      sw.classList.toggle('is-on', !!state.toggles[k]);
+    });
+  }
+
+  function bindSliders() {
+    document.querySelectorAll('input[type="range"][data-bind]').forEach(function (inp) {
+      var key = inp.getAttribute('data-bind');
+      function syncFromDom(fireNative) {
+        var value = sliderStateValue(inp);
+        var uiValue = sliderUiValue(inp, value);
+        if (Number(inp.value) !== uiValue) inp.value = uiValue;
+        deepSet(state, key, value);
+        var s = document.querySelector('[data-v="' + key + '"]');
+        if (s) s.textContent = formatMixerSliderValue(key, value);
+        if (fireNative) emit('cookielink:change', { key: key, value: value });
+      }
+      inp.addEventListener('input', function () { syncFromDom(true); });
+      syncFromDom(false);
+    });
+  }
+
+  function bindFields() {
+    document.querySelectorAll('[data-bind]:not([data-bind^="toggles"])').forEach(function (el) {
+      if (el.type === 'range') return;
+      var key = el.getAttribute('data-bind');
+      el.addEventListener('input', function () { deepSet(state, key, el.value); emit('cookielink:change', { key: key, value: el.value }); });
+      el.addEventListener('change', function () { deepSet(state, key, el.value); emit('cookielink:change', { key: key, value: el.value }); });
+    });
+  }
+
+  var backdrop = document.getElementById('popover-backdrop');
+  var openId = null;
+  var btnMetro = document.getElementById('btn-metro');
+  var btnMonitor = document.getElementById('btn-mixer-monitor');
+
+  function positionPopoverAtPoint(panel, clientX, clientY) {
+    var pad = 10;
+    var pw = panel.offsetWidth || 300;
+    var ph = panel.offsetHeight || 240;
+    var left = clientX + 2;
+    var top = clientY + 2;
+    if (left + pw > window.innerWidth - pad) left = window.innerWidth - pw - pad;
+    if (left < pad) left = pad;
+    if (top + ph > window.innerHeight - pad) top = window.innerHeight - ph - pad;
+    if (top < pad) top = pad;
+    panel.style.left = left + 'px';
+    panel.style.top = top + 'px';
+  }
+
+  function positionPopover(panel, anchorEl) {
+    var pad = 10;
+    var rect = anchorEl.getBoundingClientRect();
+    var pw = panel.offsetWidth;
+    var ph = panel.offsetHeight;
+    var left = Math.min(window.innerWidth - pw - pad, Math.max(pad, rect.right - pw));
+    var top = rect.bottom + 8;
+    if (top + ph > window.innerHeight - pad) top = Math.max(pad, rect.top - ph - 8);
+    panel.style.left = left + 'px';
+    panel.style.top = top + 'px';
+  }
+
+  var POPOVER_IDS = ['popover-settings', 'popover-audio', 'popover-record', 'popover-metro', 'popover-monitor', 'popover-more'];
+
+  function openPopover(id, anchorEl, clientX, clientY) {
+    if (id === 'popover-audio' && !(state.audio && state.audio.available)) return;
+    POPOVER_IDS.forEach(function (pid) {
+      var p = document.getElementById(pid);
+      if (!p) return;
+      p.hidden = pid !== id;
+      p.classList.toggle('is-open', pid === id);
+    });
+    openId = id;
+    backdrop.classList.add('is-open');
+    var panel = document.getElementById(id);
+    if (!panel) return;
+    panel.hidden = false;
+    syncPopoverToggles();
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        if (typeof clientX === 'number' && typeof clientY === 'number') {
+          positionPopoverAtPoint(panel, clientX, clientY);
+        } else if (anchorEl) {
+          positionPopover(panel, anchorEl);
+        }
+      });
+    });
+  }
+
+  function openOrToggleMetroSettingsFromContextMenu(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    collectTogglesFromDom();
+    if (openId === 'popover-metro') {
+      closePopover();
+      return;
+    }
+    openPopover('popover-metro', null, e.clientX, e.clientY);
+  }
+
+  function openOrToggleMonitorSettingsFromContextMenu(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (openId === 'popover-monitor') {
+      closePopover();
+      return;
+    }
+    openPopover('popover-monitor', null, e.clientX, e.clientY);
+  }
+
+  function closePopover() {
+    openId = null;
+    backdrop.classList.remove('is-open');
+    document.querySelectorAll('.popover').forEach(function (p) {
+      p.classList.remove('is-open');
+      p.hidden = true;
+    });
+  }
+
+  var noticeBackdrop = document.getElementById('notice-backdrop');
+  var noticeCard = document.getElementById('notice-card');
+  var noticeTitle = document.getElementById('notice-title');
+  var noticeBody = document.getElementById('notice-body');
+
+  function closeNotice() {
+    if (!noticeBackdrop) return;
+    noticeBackdrop.classList.remove('is-open');
+    setTimeout(function () {
+      if (!noticeBackdrop.classList.contains('is-open')) noticeBackdrop.hidden = true;
+    }, 220);
+  }
+
+  document.querySelectorAll('.js-notice-close').forEach(function (b) { b.addEventListener('click', closeNotice); });
+  if (noticeBackdrop) {
+    noticeBackdrop.addEventListener('click', function (e) {
+      if (e.target === noticeBackdrop) closeNotice();
+    });
+  }
+
+  document.querySelectorAll('.js-popover-trigger').forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var id = 'popover-' + btn.getAttribute('data-popover');
+      if (openId === id) { closePopover(); return; }
+      openPopover(id, btn);
+    });
+  });
+  backdrop.addEventListener('click', closePopover);
+  document.querySelectorAll('.js-popover-close').forEach(function (b) { b.addEventListener('click', closePopover); });
+  window.addEventListener('resize', function () {
+    if (!openId) return;
+    var panel = document.getElementById(openId);
+    if (!panel || panel.hidden) return;
+    if (openId === 'popover-metro') {
+      positionPopover(panel, btnMetro);
+      return;
+    }
+    if (openId === 'popover-monitor') {
+      positionPopover(panel, btnMonitor);
+      return;
+    }
+    var suffix = openId.replace('popover-', '');
+    var btn = document.querySelector('.js-popover-trigger[data-popover="' + suffix + '"]');
+    if (btn && panel) positionPopover(panel, btn);
+  });
+
+  document.querySelectorAll('.js-pop-toggle').forEach(function (row) {
+    row.addEventListener('click', function () {
+      var k = row.getAttribute('data-tkey');
+      var sw = row.querySelector('.sw');
+      if (!sw) return;
+      sw.classList.toggle('is-on');
+      state.toggles[k] = sw.classList.contains('is-on');
+      if (k === 'debugMode') {
+        saveDebugMode(state.toggles[k]);
+        syncPeerNameDebugMode();
+      }
+      emit('cookielink:change', { key: 'toggle.' + k, value: state.toggles[k] });
+    });
+  });
+
+  document.querySelectorAll('[data-transport-mode]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var mode = btn.getAttribute('data-transport-mode') || '0';
+      if (!state.transport) state.transport = {};
+      state.transport.mode = mode;
+      syncTransportUi();
+      emit('cookielink:change', { key: 'transport.mode', value: mode });
+    });
+  });
+
+  function setMetroIcon(on, fireNative) {
+    state.metro.on = on;
+    btnMetro.classList.toggle('is-active', on);
+    btnMetro.setAttribute('aria-pressed', on ? 'true' : 'false');
+    if (fireNative) emit('cookielink:change', { key: 'metro.on', value: on });
+  }
+  btnMetro.addEventListener('click', function (e) {
+    e.stopPropagation();
+    if (openId === 'popover-metro') closePopover();
+    setMetroIcon(!state.metro.on, true);
+  });
+  btnMetro.addEventListener('contextmenu', openOrToggleMetroSettingsFromContextMenu);
+
+  document.querySelectorAll('[data-action]').forEach(function (el) {
+    el.addEventListener('click', function () {
+      var a = el.getAttribute('data-action');
+      if (a === 'toggleConnectDetails') {
+        window.__CookieLinkConnectExpanded = !window.__CookieLinkConnectExpanded;
+        syncConnectUI();
+        return;
+      }
+      collectTogglesFromDom();
+      emit('cookielink:action', { action: a, state: JSON.parse(JSON.stringify(state)) });
+      if (a === 'randomGroup') {
+        var g = 'cookie-' + Math.random().toString(36).slice(2, 7);
+        var inp = document.getElementById('f-group');
+        if (inp) { inp.value = g; deepSet(state, 'connect.groupName', g); }
+        emit('cookielink:change', { key: 'connect.groupName', value: g });
+      }
+    });
+  });
+
+  document.body.addEventListener('click', function (e) {
+    var t = e.target.closest('[data-peer-act]');
+    if (!t) return;
+    var idx = parseInt(t.getAttribute('data-peer-index'), 10);
+    if (isNaN(idx)) return;
+    var act = t.getAttribute('data-peer-act');
+    collectTogglesFromDom();
+    postNativeToHost('peer', { index: idx, act: act, state: JSON.parse(JSON.stringify(state)) });
+  });
+
+  document.body.addEventListener('input', function (e) {
+    var t = e.target.closest('[data-peer-field]');
+    if (!t || t.type !== 'range') return;
+    if (t.getAttribute('data-peer-field') === 'volume') return;
+    var out = t.parentNode ? t.parentNode.querySelector('.peer-value') : null;
+    if (out) out.textContent = t.value + (t.getAttribute('data-peer-unit') || '');
+  });
+
+  document.body.addEventListener('change', function (e) {
+    var t = e.target.closest('[data-peer-field]');
+    if (!t) return;
+    var idx = parseInt(t.getAttribute('data-peer-index'), 10);
+    if (isNaN(idx)) return;
+    postNativeToHost('peer', {
+      index: idx,
+      field: t.getAttribute('data-peer-field'),
+      value: t.value,
+      state: JSON.parse(JSON.stringify(state))
+    });
+  });
+
+  (function () {
+    var btn = document.getElementById('btn-mixer-monitor');
+    if (btn) {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        setMixerMonitorEnabled(!btn.classList.contains('is-on'), true);
+      });
+      btn.addEventListener('contextmenu', openOrToggleMonitorSettingsFromContextMenu);
+    }
+  })();
+
+  loadMixerMonitorEnabledFromStorage();
+  syncMixerMonitorUi();
+  syncPopoverToggles();
+  syncTransportUi();
+  syncRecordUi();
+  bindSliders();
+  bindFields();
+  syncConnectUI();
+  syncMasterMetersFromState();
+  syncConnectFieldsLock();
+
+  window.CookieLinkShell = {
+    version: 2,
+    _decodeB64Utf8: function (b64) {
+      var bin = atob(b64 || '');
+      if (window.TextDecoder) {
+        var bytes = new Uint8Array(bin.length);
+        for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        return new TextDecoder('utf-8').decode(bytes);
+      }
+      var pct = '';
+      for (var i = 0; i < bin.length; i++) pct += '%' + ('00' + bin.charCodeAt(i).toString(16)).slice(-2);
+      return decodeURIComponent(pct);
+    },
+    _repairNoticeText: function (text) {
+      text = String(text || '');
+      if (!text) return text;
+      var cp1252 = {
+        0x20ac: 0x80, 0x201a: 0x82, 0x0192: 0x83, 0x201e: 0x84, 0x2026: 0x85,
+        0x2020: 0x86, 0x2021: 0x87, 0x02c6: 0x88, 0x2030: 0x89, 0x0160: 0x8a,
+        0x2039: 0x8b, 0x0152: 0x8c, 0x017d: 0x8e, 0x2018: 0x91, 0x2019: 0x92,
+        0x201c: 0x93, 0x201d: 0x94, 0x2022: 0x95, 0x2013: 0x96, 0x2014: 0x97,
+        0x02dc: 0x98, 0x2122: 0x99, 0x0161: 0x9a, 0x203a: 0x9b, 0x0153: 0x9c,
+        0x017e: 0x9e, 0x0178: 0x9f
+      };
+      function repairChunk(chunk) {
+        var bytes = [];
+        for (var i = 0; i < chunk.length; i++) {
+          var c = chunk.charCodeAt(i);
+          if (c <= 255) bytes.push(c);
+          else if (cp1252[c] !== undefined) bytes.push(cp1252[c]);
+          else return chunk;
+        }
+        try {
+          var decoded = window.TextDecoder ? new TextDecoder('utf-8').decode(new Uint8Array(bytes)) : decodeURIComponent(bytes.map(function (b) {
+            return '%' + ('00' + b.toString(16)).slice(-2);
+          }).join(''));
+          if (decoded && decoded.indexOf('\ufffd') < 0 && /[\u3400-\u9fff]/.test(decoded)) return decoded;
+        } catch (e) {}
+        return chunk;
+      }
+      return text.replace(/[\u0080-\u00ff\u0152\u0153\u0160\u0161\u0178\u017d\u017e\u0192\u02c6\u02dc\u2013\u2014\u2018-\u201e\u2020\u2021\u2022\u2026\u2030\u2039\u203a\u20ac\u2122]+/g, repairChunk);
+    },
+    getState: function () {
+      collectTogglesFromDom();
+      document.querySelectorAll('[data-bind]').forEach(function (el) {
+        if (el.type === 'range') deepSet(state, el.getAttribute('data-bind'), sliderStateValue(el));
+        else deepSet(state, el.getAttribute('data-bind'), el.value);
+      });
+      state.metro.on = btnMetro.classList.contains('is-active');
+      var sbmG = document.getElementById('btn-send-mute');
+      if (sbmG && state.toggles) state.toggles.mainSendMuted = sbmG.classList.contains('is-on');
+      var swm = document.getElementById('btn-mixer-monitor');
+      if (swm && state.mixer) state.mixer.monitorEnabled = swm.classList.contains('is-on');
+      return JSON.parse(JSON.stringify(state));
+    },
+    setStateB64: function (b64) {
+      this.setState(JSON.parse(this._decodeB64Utf8(b64)));
+    },
+    showNoticeB64: function (titleB64, bodyB64, isError) {
+      if (!noticeBackdrop || !noticeCard || !noticeTitle || !noticeBody) return;
+      noticeTitle.textContent = this._repairNoticeText(this._decodeB64Utf8(titleB64)) || '提示';
+      noticeBody.textContent = this._repairNoticeText(this._decodeB64Utf8(bodyB64)) || '';
+      noticeCard.classList.toggle('is-error', !!isError);
+      noticeBackdrop.hidden = false;
+      requestAnimationFrame(function () { noticeBackdrop.classList.add('is-open'); });
+    },
+    setState: function (partial) {
+      function merge(a, b) {
+        Object.keys(b || {}).forEach(function (k) {
+          if (b[k] && typeof b[k] === 'object' && !Array.isArray(b[k]) && typeof a[k] === 'object') merge(a[k], b[k]);
+          else a[k] = b[k];
+        });
+      }
+      merge(state, partial || {});
+      if (partial && partial.uiStatusKey !== undefined) {
+        var el = document.getElementById('ui-status');
+        var txt = '未连接';
+        if (partial.uiStatusKey === 'connectedServer') txt = '已连接服务器';
+        if (partial.uiStatusKey === 'connectedGroup') txt = '已连接' + (partial.uiStatusGroup ? ' · ' + partial.uiStatusGroup : '');
+        if (el) el.textContent = txt;
+        if (el) el.classList.toggle('is-live', !!partial.uiStatusLive);
+      }
+      if (state.options) state.options.sendQualityIndex = setSelectOptions('sel-send-quality', state.options.sendQualityOptions, state.options.sendQualityIndex);
+      if (state.audio) {
+        syncAudioSettingsUi();
+        state.audio.deviceType = setSelectOptions('sel-audio-type', state.audio.deviceTypeOptions, state.audio.deviceType);
+        state.audio.inputDevice = setSelectOptions('sel-audio-input', state.audio.inputDeviceOptions, state.audio.inputDevice);
+        state.audio.outputDevice = setSelectOptions('sel-audio-output', state.audio.outputDeviceOptions, state.audio.outputDevice);
+        state.audio.sampleRate = setSelectOptions('sel-audio-rate', state.audio.sampleRateOptions, state.audio.sampleRate);
+        state.audio.buffer = setSelectOptions('sel-audio-buffer', state.audio.bufferOptions, state.audio.buffer);
+      }
+      syncAudioSettingsUi();
+      syncRecordUi();
+      document.querySelectorAll('[data-bind]').forEach(function (el) {
+        var k = el.getAttribute('data-bind');
+        var v = deepGet(state, k);
+        if (v !== undefined && el !== document.activeElement && el.type !== 'range') el.value = v;
+        if (v !== undefined && el !== document.activeElement && el.type === 'range') { el.value = sliderUiValue(el, v); var dv = document.querySelector('[data-v="' + k + '"]'); if (dv) dv.textContent = formatMixerSliderValue(k, v); }
+      });
+      if (state.metro && typeof state.metro.on === 'boolean') setMetroIcon(state.metro.on, false);
+      syncTransportUi();
+      syncPopoverToggles();
+      syncPeerNameDebugMode();
+      syncConnectUI();
+      syncMasterMetersFromState();
+      syncConnectFieldsLock();
+      var sbm = document.getElementById('btn-send-mute');
+      if (sbm && state.toggles && state.toggles.mainSendMuted !== undefined)
+        sbm.classList.toggle('is-on', !!state.toggles.mainSendMuted);
+      syncMixerMonitorUi();
+    },
+    renderPeers: function (html) {
+      var el = document.getElementById('peers-scroll');
+      if (el) el.innerHTML = html || '';
+    },
+    renderPeersB64: function (b64) {
+      this.renderPeers(this._decodeB64Utf8(b64));
+    },
+    renderPeersDataB64: function (b64) {
+      this.renderPeersData(JSON.parse(this._decodeB64Utf8(b64)));
+    },
+    updatePeersLiveB64: function (b64) {
+      var arr = JSON.parse(this._decodeB64Utf8(b64));
+      if (!Array.isArray(arr)) return;
+      var root = document.getElementById('peers-scroll');
+      if (!root) return;
+      arr.forEach(function (p) {
+        var ix = String(p.index != null ? p.index : 0);
+        var row = root.querySelector('.peer-line[data-peer-line="' + ix + '"]');
+        if (!row) return;
+        var net = row.querySelector('.peer-net');
+        if (net) net.textContent = p.netRatesText || '';
+        var del = row.querySelector('.peer-delay');
+        if (del && p.latencyText !== undefined) del.textContent = p.latencyText || '';
+        var relay = row.querySelector('.peer-relay');
+        if (relay && p.relayStatsText !== undefined) {
+          relay.textContent = p.relayStatsText || '';
+          relay.hidden = !p.relayStatsText;
+          relay.classList.toggle('is-warn', !!p.relayCongested);
+        }
+        var fills = row.querySelectorAll('.peer-meter-pair .meter-fill');
+        var ml = Number(p.meterL) || 0;
+        var mr = Number(p.meterR) || 0;
+        if (fills[0]) fills[0].style.height = Math.min(100, Math.max(0, ml * 100)) + '%';
+        if (fills[1]) fills[1].style.height = Math.min(100, Math.max(0, mr * 100)) + '%';
+        var mute = row.querySelector('[data-peer-act="mute"]');
+        var solo = row.querySelector('[data-peer-act="solo"]');
+        if (mute && p.recvMuted !== undefined) mute.classList.toggle('is-on', !!p.recvMuted);
+        if (solo && p.solo !== undefined) solo.classList.toggle('is-on', !!p.solo);
+      });
+    },
+    renderPeersData: function (peers) {
+      var el = document.getElementById('peers-scroll');
+      if (!el) return;
+      var ae = document.activeElement;
+      var volKeep = null;
+      if (ae && ae.getAttribute && el.contains(ae) && ae.getAttribute('data-peer-field') === 'volume') {
+        volKeep = { idx: ae.getAttribute('data-peer-index'), val: ae.value };
+      }
+      el.textContent = '';
+      if (!Array.isArray(peers) || peers.length === 0) {
+        var empty = document.createElement('p');
+        empty.className = 'hint';
+        empty.style.margin = '12px 4px';
+        empty.textContent = '暂无远端成员';
+        el.appendChild(empty);
+        return;
+      }
+      var qualityOptions = normalizeOptions(state.options && state.options.sendQualityOptions);
+      var bufferModes = [
+        { id: '0', name: '手动' },
+        { id: '1', name: '自动上升' },
+        { id: '2', name: '自动' },
+        { id: '3', name: '初始自动' }
+      ];
+      function appendOptions(sel, options, current) {
+        options.forEach(function (opt) {
+          var o = document.createElement('option');
+          o.value = opt.id;
+          o.textContent = opt.name;
+          sel.appendChild(o);
+        });
+        sel.value = String(current);
+      }
+      function peerRange(peer, field, labelText, value, min, max, unit) {
+        var wrap = document.createElement('div');
+        wrap.className = 'peer-ctrl';
+        var label = document.createElement('label');
+        label.textContent = labelText;
+        var val = document.createElement('span');
+        val.className = 'peer-value';
+        val.textContent = String(value) + (unit || '');
+        label.appendChild(val);
+        var input = document.createElement('input');
+        input.type = 'range';
+        input.min = String(min);
+        input.max = String(max);
+        input.value = String(value);
+        input.setAttribute('data-peer-index', String(peer.index || 0));
+        input.setAttribute('data-peer-field', field);
+        input.setAttribute('data-peer-unit', unit || '');
+        wrap.appendChild(label);
+        wrap.appendChild(input);
+        return wrap;
+      }
+      function peerSelect(peer, field, labelText, options, current) {
+        var wrap = document.createElement('div');
+        wrap.className = 'peer-ctrl';
+        var label = document.createElement('label');
+        label.textContent = labelText;
+        var sel = document.createElement('select');
+        sel.className = 'select';
+        sel.setAttribute('data-peer-index', String(peer.index || 0));
+        sel.setAttribute('data-peer-field', field);
+        appendOptions(sel, options, current);
+        wrap.appendChild(label);
+        wrap.appendChild(sel);
+        var want = String(current);
+        var has = false;
+        for (var oi = 0; oi < sel.options.length; oi++) { if (sel.options[oi].value === want) { has = true; break; } }
+        if (has) sel.value = want;
+        else if (sel.options.length) sel.selectedIndex = 0;
+        return wrap;
+      }
+      function peerVolumeDb(peer) {
+        var wrap = document.createElement('div');
+        wrap.className = 'peer-ctrl peer-ctrl--vol-slim peer-ctrl--vol-overlaid';
+        var track = document.createElement('div');
+        track.className = 'peer-vol-range';
+        var val = document.createElement('span');
+        val.className = 'peer-value peer-vol-range__cap';
+        function fmtLevelDb(n) {
+          var x = Math.round(Number(n) * 10) / 10;
+          if (isNaN(x)) x = 0;
+          return 'Level: ' + (x > 0 ? '+' : '') + x + ' dB';
+        }
+        var vdb = Number(peer.volumeDb);
+        if (isNaN(vdb)) vdb = 0;
+        vdb = Math.min(6, Math.max(-48, vdb));
+        val.textContent = fmtLevelDb(vdb);
+        var input = document.createElement('input');
+        input.type = 'range';
+        input.min = '-48';
+        input.max = '6';
+        input.step = '0.5';
+        input.value = String(vdb);
+        input.setAttribute('data-peer-index', String(peer.index || 0));
+        input.setAttribute('data-peer-field', 'volume');
+        input.setAttribute('data-peer-unit', '');
+        input.addEventListener('input', function () {
+          val.textContent = fmtLevelDb(input.value);
+        });
+        track.appendChild(val);
+        track.appendChild(input);
+        wrap.appendChild(track);
+        return wrap;
+      }
+      window.__CookieLinkPeerAdv = window.__CookieLinkPeerAdv || {};
+      peers.forEach(function (peer) {
+        var pidx = peer.index || 0;
+        var advOpen = !!window.__CookieLinkPeerAdv[pidx];
+        var row = document.createElement('div');
+        row.className = 'peer-line';
+        row.setAttribute('data-peer-line', String(pidx));
+        var row1 = document.createElement('div');
+        row1.className = 'peer-row1';
+        var meta = document.createElement('div');
+        meta.className = 'peer-row1-meta';
+        var name = document.createElement('span');
+        name.className = 'peer-name';
+        name.setAttribute('data-full-name', peer.name || '');
+        name.textContent = displayPeerName(peer.name || '');
+        meta.appendChild(name);
+        var net = document.createElement('div');
+        net.className = 'peer-net';
+        net.textContent = peer.netRatesText || '';
+        meta.appendChild(net);
+        var delay = document.createElement('div');
+        delay.className = 'peer-delay';
+        delay.textContent = peer.latencyText || '';
+        meta.appendChild(delay);
+        var relay = document.createElement('div');
+        relay.className = 'peer-relay' + (peer.relayCongested ? ' is-warn' : '');
+        relay.textContent = peer.relayStatsText || '';
+        relay.hidden = !peer.relayStatsText;
+        meta.appendChild(relay);
+        var advPanel = document.createElement('div');
+        advPanel.className = 'peer-adv';
+        advPanel.hidden = !advOpen;
+        var advToggle = document.createElement('button');
+        advToggle.type = 'button';
+        advToggle.className = 'mini-btn peer-adv-toggle--row' + (advOpen ? ' is-on' : '');
+        advToggle.textContent = advOpen ? '收起' : '网络与音质';
+        advToggle.setAttribute('aria-expanded', advOpen ? 'true' : 'false');
+        advToggle.addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          window.__CookieLinkPeerAdv = window.__CookieLinkPeerAdv || {};
+          window.__CookieLinkPeerAdv[pidx] = !window.__CookieLinkPeerAdv[pidx];
+          var on = !!window.__CookieLinkPeerAdv[pidx];
+          advPanel.hidden = !on;
+          advToggle.textContent = on ? '收起' : '网络与音质';
+          advToggle.classList.toggle('is-on', on);
+          advToggle.setAttribute('aria-expanded', on ? 'true' : 'false');
+        });
+        row1.appendChild(meta);
+        var ctrlsWrap = document.createElement('div');
+        ctrlsWrap.className = 'peer-row1-ctrls';
+        var actCol = document.createElement('div');
+        actCol.className = 'peer-row1-actions';
+        var actions = document.createElement('div');
+        actions.className = 'peer-actions';
+        var mute = document.createElement('button');
+        mute.type = 'button';
+        mute.className = 'mini-btn' + (peer.recvMuted ? ' is-on' : '');
+        mute.setAttribute('data-peer-index', String(pidx));
+        mute.setAttribute('data-peer-act', 'mute');
+        mute.textContent = '静音';
+        var solo = document.createElement('button');
+        solo.type = 'button';
+        solo.className = 'mini-btn' + (peer.solo ? ' is-on' : '');
+        solo.setAttribute('data-peer-index', String(pidx));
+        solo.setAttribute('data-peer-act', 'solo');
+        solo.textContent = '独奏';
+        actions.appendChild(mute);
+        actions.appendChild(solo);
+        actCol.appendChild(actions);
+        ctrlsWrap.appendChild(actCol);
+        ctrlsWrap.appendChild(advToggle);
+        var volMeterWrap = document.createElement('div');
+        volMeterWrap.className = 'peer-vol-meter-wrap';
+        volMeterWrap.appendChild(peerVolumeDb(peer));
+        var mpr = document.createElement('div');
+        mpr.className = 'meter-pair peer-meter-pair';
+        mpr.setAttribute('title', '该成员接收立体声 RMS（约 -54～0 dBFS 刻度）');
+        ['meterL', 'meterR'].forEach(function (k) {
+          var col = document.createElement('div');
+          col.className = 'meter-col';
+          var fill = document.createElement('div');
+          fill.className = 'meter-fill';
+          var vv = Number(peer[k]) || 0;
+          fill.style.height = Math.min(100, Math.max(0, vv * 100)) + '%';
+          col.appendChild(fill);
+          mpr.appendChild(col);
+        });
+        volMeterWrap.appendChild(mpr);
+        ctrlsWrap.appendChild(volMeterWrap);
+        row1.appendChild(ctrlsWrap);
+        row.appendChild(row1);
+        advPanel.appendChild(peerRange(peer, 'bufferMs', '延迟缓冲', peer.bufferMs || 0, 0, 500, 'ms'));
+        advPanel.appendChild(peerSelect(peer, 'sendQuality', '发送音质', qualityOptions, peer.sendQualityIndex));
+        advPanel.appendChild(peerSelect(peer, 'recvQuality', '接收音质', qualityOptions, peer.recvQualityIndex));
+        advPanel.appendChild(peerSelect(peer, 'bufferMode', '延迟模式', bufferModes, peer.bufferModeIndex));
+        row.appendChild(advPanel);
+        el.appendChild(row);
+      });
+      if (volKeep && volKeep.idx != null && volKeep.val != null) {
+        var inp = el.querySelector('input[type="range"][data-peer-field="volume"][data-peer-index="' + volKeep.idx + '"]');
+        if (inp) {
+          inp.value = String(volKeep.val);
+          var lbl = inp.parentNode && inp.parentNode.querySelector('.peer-value');
+          if (lbl) {
+            var xv = Math.round(Number(volKeep.val) * 10) / 10;
+            if (isNaN(xv)) xv = 0;
+            lbl.textContent = 'Level: ' + (xv > 0 ? '+' : '') + xv + ' dB';
+          }
+          try { inp.focus(); } catch (e2) {}
+        }
+      }
+    },
+    closePopover: closePopover
+  };
+})();
+  </script>
+</body>
+</html>
